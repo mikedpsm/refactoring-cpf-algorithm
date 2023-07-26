@@ -1,22 +1,43 @@
-// @ts-nocheck
+import express from "express";
+import { validate } from "./CpfValidator";
+import pgp from "pg-promise";
 
-function calculateDigit (cpf: string, factor: number) {
-    let total = 0;
-    for (const digit of cpf) {
-        if (factor > 1) total += digit * factor--;
+const app = express();
+app.use(express.json());
+
+const connection = pgp()("postgresql://sukuna:772010@localhost:5432/app");
+
+app.post("/checkout", async function (req, res) {
+    const isValid = validate(req.body.cpf);
+    if (!isValid) {
+        return res.status(422).json({
+            message: "Invalid CPF"
+        });
     }
-    const rest = total % 11;
-    return (rest < 2) ? 0 : 11 - rest;
-}
 
-export function validate (str) {
-	if (!str) return false;
-    if (str.length < 11 || str.length > 14) return false;
-    str=str.replace('.','').replace('.','').replace('-','').replace(" ","");  
-    if (str.split("").every(c => c === str[0])) return false;
-    const dg1 = calculateDigit(str, 10);
-    const dg2 = calculateDigit(str, 11);
-    let nDigVerific = str.substring(str.length-2, str.length);  
-    const nDigResult = "" + dg1 + "" + dg2;  
-    return nDigVerific == nDigResult;
-}
+    let total = 0;
+    for (const item of req.body.items) {
+        // const product = products.find(p => p.idProduct === item.idProduct);
+        const [product] = await connection.query("select * from cccat9.product where id_product = $1", [item.idProduct])
+        if (product) {
+            total += parseFloat(product.price) * item.quantity;
+        } else {
+            return res.status(422).json({
+                message: "Product not found"
+            });
+        }
+    }
+
+    if (req.body.coupon) {
+        const [coupon] = await connection.query("select * from cccat9.coupon where code = $1", [req.body.coupon]);
+        if (coupon) {
+            total -= (total * coupon.percentage) / 100;
+        }
+    }
+
+    res.json({
+        total
+    });
+});
+app.listen(3000);
+

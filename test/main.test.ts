@@ -1,46 +1,57 @@
-import { validate } from "../src/main"
+import axios from "axios";
 
-const validCpfs = [
-  "987.654.321-00",
-  "714.602.380-01",
-  "313.030.210-72",
-  "144.796.170-60"
-]
+axios.defaults.validateStatus = function () {
+  return true;
+}
 
-test.each(validCpfs)("Should test a valid CPF: %s", function(cpf: string) {
-  const isValid = validate(cpf);
-  expect(isValid).toBeTruthy();
+test("Shouldn't do a checkout with an invalid CPF", async function () {
+  const input = {
+    cpf: "987.654.321-01",
+  };
+  const response = await axios.post("http://localhost:3000/checkout", input);
+  expect(response.status).toBe(422);
+  const output = response.data;
+  expect(output.message).toBe("Invalid CPF");
 });
 
-const invalidCpfs = [
-  "111.111.111-11",
-  "222.222.222-22",
-  "333.333.333-33",
-  "444.444.444-44",
-  "555.555.555-55",
-  "666.666.666-66",
-  "777.777.777-77",
-  "888.888.888-88",
-  "999.999.999-99"
-];
-
-test.each(invalidCpfs)("Should test an invalid CPF: %s", function(cpf: string) {
-  const isValid = validate(cpf);
-  expect(isValid).toBeFalsy();
+test("Should do a checkout with 3 products", async function () {
+  const input = {
+    cpf: "987.654.321-00",
+    items: [
+      { idProduct: 1, quantity: 1 },
+      { idProduct: 2, quantity: 1 },
+      { idProduct: 3, quantity: 3 }
+    ]
+  };
+  const response = await axios.post("http://localhost:3000/checkout", input);
+  const output = response.data;
+  expect(output.total).toBe(6090);
 });
 
-test("Should test an undefined CPF", function() {
-  const isValid = validate(undefined);
-  expect(isValid).toBeFalsy();
+test("Shouldn't do a request with an invalid product", async function () {
+  const input = {
+    cpf: "987.654.321-00",
+    items: [
+      { idProduct: 4, quantity: 1 }
+    ]
+  };
+  const response = await axios.post("http://localhost:3000/checkout", input);
+  expect(response.status).toBe(422);
+  const output = response.data;
+  expect(output.message).toBe("Product not found");
 });
 
-test("Should test a null CPF", function() {
-  const isValid = validate(null);
-  expect(isValid).toBeFalsy();
-});
-
-
-test("Should test an oversized CPF", function() {
-  const isValid = validate("");
-  expect(isValid).toBeFalsy();
+test("Should do a request with 3 products and a discount coupon", async function () {
+  const input = {
+    cpf: "987.654.321-00",
+    items: [
+      { idProduct: 1, quantity: 1 },
+      { idProduct: 2, quantity: 1 },
+      { idProduct: 3, quantity: 3 }
+    ],
+    coupon: "MINUS20"
+  };
+  const response = await axios.post("http://localhost:3000/checkout", input);
+  const output = response.data;
+  expect(output.total).toBe(4872);
 });
